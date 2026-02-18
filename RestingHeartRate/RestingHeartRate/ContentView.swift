@@ -44,16 +44,13 @@ struct ContentView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Heart")
+                Text("Biometrics")
                     .font(.largeTitle.bold())
                 Text(Date.now, format: .dateTime.weekday(.wide).month(.wide).day())
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: "heart.text.square.fill")
-                .font(.title)
-                .foregroundStyle(.red)
         }
     }
 
