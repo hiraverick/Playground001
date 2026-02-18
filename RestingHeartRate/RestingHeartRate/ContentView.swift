@@ -20,19 +20,22 @@ struct ContentView: View {
 
                 Spacer()
 
-                heartRateCard
-                    .padding(.horizontal, 20)
+                if healthKit.isAuthorized {
+                    heartRateCard
+                        .padding(.horizontal, 20)
+                } else {
+                    authorizationPrompt
+                        .padding(.horizontal, 20)
+                }
 
                 Spacer()
 
-                refreshButton
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 40)
+                if healthKit.isAuthorized {
+                    refreshButton
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 40)
+                }
             }
-        }
-        .task {
-            try? await Task.sleep(for: .seconds(0.5))
-            healthKit.requestAuthorization()
         }
     }
 
@@ -154,6 +157,45 @@ struct ContentView: View {
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
             }
+        }
+    }
+
+    // MARK: - Authorization Prompt
+
+    private var authorizationPrompt: some View {
+        VStack(spacing: 28) {
+            heartIcon
+            label
+
+            VStack(spacing: 12) {
+                Text("Health Access Required")
+                    .font(.system(.headline, design: .rounded))
+                Text("Tap below to allow this app to read your resting heart rate from the Health app.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                Task { await healthKit.requestAuthorization() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "heart.fill")
+                    Text("Enable Health Access")
+                }
+                .font(.system(.body, design: .rounded, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.red, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .foregroundStyle(.white)
+            }
+        }
+        .padding(.vertical, 36)
+        .padding(.horizontal, 28)
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 8)
         }
     }
 

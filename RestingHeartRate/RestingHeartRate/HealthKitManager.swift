@@ -10,6 +10,7 @@ final class HealthKitManager {
     var restingHeartRate: Double? = nil
     var lastReadingDate: Date? = nil
     var isLoading = false
+    var isAuthorized = false
     var errorMessage: String? = nil
 
     // MARK: - Private
@@ -29,22 +30,21 @@ final class HealthKitManager {
 
     // MARK: - Authorization
 
-    func requestAuthorization() {
+    func requestAuthorization() async {
         guard isHealthDataAvailable else {
             errorMessage = "HealthKit is not available on this device."
             return
         }
 
-        Task {
-            do {
-                try await healthStore.requestAuthorization(
-                    toShare: [],
-                    read: [restingHRType]
-                )
-                await fetchRestingHeartRate()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
+        do {
+            try await healthStore.requestAuthorization(
+                toShare: [],
+                read: [restingHRType]
+            )
+            isAuthorized = true
+            await fetchRestingHeartRate()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
