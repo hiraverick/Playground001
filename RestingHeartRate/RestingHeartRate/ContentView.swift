@@ -37,12 +37,6 @@ struct ContentView: View {
                 }
             }
         }
-        .task {
-            // Brief delay so the app window is fully active before
-            // HealthKit tries to present its authorization sheet.
-            try? await Task.sleep(for: .milliseconds(500))
-            await healthKit.requestAuthorization()
-        }
     }
 
     // MARK: - Header
