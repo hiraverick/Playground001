@@ -30,7 +30,8 @@ struct ContentView: View {
                     .padding(.bottom, 40)
             }
         }
-        .onAppear {
+        .task {
+            try? await Task.sleep(for: .seconds(0.5))
             healthKit.requestAuthorization()
         }
     }
