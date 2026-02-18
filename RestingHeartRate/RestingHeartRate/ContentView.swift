@@ -37,6 +37,9 @@ struct ContentView: View {
                 }
             }
         }
+        .task {
+            await healthKit.requestAuthorization()
+        }
     }
 
     // MARK: - Header
