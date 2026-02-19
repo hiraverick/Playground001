@@ -4,36 +4,37 @@ struct ContentView: View {
     @State private var healthKit = HealthKitManager()
 
     var body: some View {
-        ZStack {
-            // Subtle warm background
-            LinearGradient(
-                colors: [Color(.systemBackground), Color.red.opacity(0.04)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(
+                    colors: [Color(.systemBackground), Color.red.opacity(0.04)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        header
+                            .padding(.horizontal, 24)
+                            .padding(.top, 16)
 
-                Spacer()
+                        Spacer(minLength: 0)
 
-                if healthKit.isAuthorized {
-                    heartRateCard
-                        .padding(.horizontal, 20)
-                } else {
-                    authorizationPrompt
-                        .padding(.horizontal, 20)
+                        if healthKit.isAuthorized {
+                            heartRateCard
+                                .padding(.horizontal, 20)
+                        } else {
+                            authorizationPrompt
+                                .padding(.horizontal, 20)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: geo.size.height)
                 }
-
-                Spacer()
-
-                if healthKit.isAuthorized {
-                    refreshButton
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 40)
+                .refreshable {
+                    await healthKit.fetchRestingHeartRate()
                 }
             }
         }
@@ -79,10 +80,15 @@ struct ContentView: View {
             Circle()
                 .fill(Color.red.opacity(0.1))
                 .frame(width: 72, height: 72)
-            Image(systemName: "heart.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(.red)
-                .symbolEffect(.pulse, isActive: healthKit.isLoading)
+
+            if let bpm = healthKit.restingHeartRate, !healthKit.isLoading {
+                HeartbeatIcon(bpm: bpm)
+            } else {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.red)
+                    .symbolEffect(.pulse, isActive: healthKit.isLoading)
+            }
         }
     }
 
@@ -208,28 +214,32 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 8)
         }
     }
+}
 
-    // MARK: - Refresh Button
+// MARK: - Heartbeat Animation
 
-    private var refreshButton: some View {
-        Button {
-            Task { await healthKit.fetchRestingHeartRate() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.clockwise")
-                Text("Refresh")
-            }
-            .font(.system(.body, design: .rounded, weight: .semibold))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                Color.red.opacity(healthKit.isLoading ? 0.06 : 0.1),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
+private struct HeartbeatIcon: View {
+    let bpm: Double
+
+    var body: some View {
+        let beatDuration = 60.0 / bpm
+        let restDuration = max(0.05, beatDuration - 0.4)
+
+        Image(systemName: "heart.fill")
+            .font(.system(size: 32))
             .foregroundStyle(.red)
-        }
-        .disabled(healthKit.isLoading)
-        .animation(.easeInOut(duration: 0.15), value: healthKit.isLoading)
+            .keyframeAnimator(
+                initialValue: CGFloat(1.0),
+                repeating: true
+            ) { content, scale in
+                content.scaleEffect(scale)
+            } keyframes: { _ in
+                CubicKeyframe(1.3,  duration: 0.10) // lub up
+                CubicKeyframe(1.0,  duration: 0.12) // lub down
+                CubicKeyframe(1.18, duration: 0.08) // dub up
+                CubicKeyframe(1.0,  duration: 0.10) // dub down
+                LinearKeyframe(1.0, duration: restDuration) // rest
+            }
     }
 }
 
