@@ -19,6 +19,13 @@ final class HealthKitManager {
     private let restingHRType = HKQuantityType(.restingHeartRate)
     private let bpmUnit = HKUnit(from: "count/min")
 
+    /// Persists whether the user has ever tapped through the HK auth dialog,
+    /// so on subsequent launches we skip the prompt and go straight to fetching.
+    private var hasRequestedAuth: Bool {
+        get { UserDefaults.standard.bool(forKey: "hk_auth_requested") }
+        set { UserDefaults.standard.set(newValue, forKey: "hk_auth_requested") }
+    }
+
     var isHealthDataAvailable: Bool {
         HKHealthStore.isHealthDataAvailable()
     }
@@ -26,6 +33,18 @@ final class HealthKitManager {
     var isReadingFromToday: Bool {
         guard let date = lastReadingDate else { return false }
         return Calendar.current.isDateInToday(date)
+    }
+
+    // MARK: - Initialization
+
+    /// Called once when the root view appears. If the user has already been
+    /// through the auth dialog we skip the prompt and fetch immediately.
+    func initialize() async {
+        guard isHealthDataAvailable else { return }
+        if hasRequestedAuth {
+            isAuthorized = true
+            await fetchRestingHeartRate()
+        }
     }
 
     // MARK: - Authorization
@@ -36,15 +55,26 @@ final class HealthKitManager {
             return
         }
 
+        isLoading = true
+        errorMessage = nil
+
         do {
             try await healthStore.requestAuthorization(
                 toShare: [],
                 read: [restingHRType]
             )
+            hasRequestedAuth = true
             isAuthorized = true
             await fetchRestingHeartRate()
         } catch {
-            errorMessage = error.localizedDescription
+            isLoading = false
+            let nsError = error as NSError
+            // Error code 5 = HKError.errorAuthorizationRequestDenied (session timed out / UI couldn't present)
+            if nsError.domain == HKErrorDomain && nsError.code == HKError.errorAuthorizationRequestDenied.rawValue {
+                errorMessage = "Couldn't show Health permission dialog. Please grant access in Settings > Privacy & Security > Health."
+            } else {
+                errorMessage = "Authorization failed. Please try again."
+            }
         }
     }
 

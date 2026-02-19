@@ -37,6 +37,7 @@ struct ContentView: View {
                 }
             }
         }
+        .task { await healthKit.initialize() }
     }
 
     // MARK: - Header
@@ -173,11 +174,22 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
             }
 
+            if let error = healthKit.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
+
             Button {
                 Task { await healthKit.requestAuthorization() }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "heart.fill")
+                    if healthKit.isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "heart.fill")
+                    }
                     Text("Enable Health Access")
                 }
                 .font(.system(.body, design: .rounded, weight: .semibold))
@@ -186,6 +198,7 @@ struct ContentView: View {
                 .background(Color.red, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .foregroundStyle(.white)
             }
+            .disabled(healthKit.isLoading)
         }
         .padding(.vertical, 36)
         .padding(.horizontal, 28)
