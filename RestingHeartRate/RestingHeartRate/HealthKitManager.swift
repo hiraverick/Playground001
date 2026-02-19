@@ -87,9 +87,12 @@ final class HealthKitManager {
         )
 
         // Prefer a reading from today; fall back to most recent ever
-        var result = await querySample(predicate: todayPredicate)
+        let store = healthStore
+        let type  = restingHRType
+        let unit  = bpmUnit
+        var result = await querySample(predicate: todayPredicate, store: store, type: type, unit: unit)
         if result == nil {
-            result = await querySample(predicate: nil)
+            result = await querySample(predicate: nil, store: store, type: type, unit: unit)
         }
 
         restingHeartRate = result?.0
@@ -99,24 +102,31 @@ final class HealthKitManager {
 
     // MARK: - Private Helpers
 
-    private func querySample(predicate: NSPredicate?) async -> (Double, Date)? {
+    // nonisolated so the continuation is not main-actor-bound; HKSampleQuery
+    // delivers its callback on a background thread and resuming from there
+    // would otherwise trigger an unsafeForcedSync warning.
+    private nonisolated func querySample(
+        predicate: NSPredicate?,
+        store: HKHealthStore,
+        type: HKQuantityType,
+        unit: HKUnit
+    ) async -> (Double, Date)? {
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
-                sampleType: restingHRType,
+                sampleType: type,
                 predicate: predicate,
                 limit: 1,
                 sortDescriptors: [sort]
-            ) { [bpmUnit] _, samples, _ in
+            ) { _, samples, _ in
                 guard let sample = samples?.first as? HKQuantitySample else {
                     continuation.resume(returning: nil)
                     return
                 }
-                let bpm = sample.quantity.doubleValue(for: bpmUnit)
-                continuation.resume(returning: (bpm, sample.startDate))
+                continuation.resume(returning: (sample.quantity.doubleValue(for: unit), sample.startDate))
             }
-            healthStore.execute(query)
+            store.execute(query)
         }
     }
 }
