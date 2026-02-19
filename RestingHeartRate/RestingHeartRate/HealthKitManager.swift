@@ -68,11 +68,7 @@ final class HealthKitManager {
             await fetchRestingHeartRate()
         } catch {
             isLoading = false
-            if let hkError = error as? HKError, hkError.code == .errorAuthorizationRequestDenied {
-                errorMessage = "Couldn't show Health permission dialog. Please grant access in Settings > Privacy & Security > Health."
-            } else {
-                errorMessage = "Authorization failed. Please try again."
-            }
+            errorMessage = "Authorization failed. Please try again."
         }
     }
 
