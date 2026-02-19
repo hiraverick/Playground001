@@ -68,9 +68,7 @@ final class HealthKitManager {
             await fetchRestingHeartRate()
         } catch {
             isLoading = false
-            let nsError = error as NSError
-            // Error code 5 = HKError.errorAuthorizationRequestDenied (session timed out / UI couldn't present)
-            if nsError.domain == HKErrorDomain && nsError.code == HKError.errorAuthorizationRequestDenied.rawValue {
+            if let hkError = error as? HKError, hkError.code == .errorAuthorizationRequestDenied {
                 errorMessage = "Couldn't show Health permission dialog. Please grant access in Settings > Privacy & Security > Health."
             } else {
                 errorMessage = "Authorization failed. Please try again."
