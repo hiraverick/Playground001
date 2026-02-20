@@ -27,19 +27,24 @@ enum HRZone: Equatable {
         }
     }
 
-    /// Multiple queries per zone so repeated views get variety.
+    /// Multiple queries per zone so repeated views get variety. All nature, graduated calm → intense.
     var searchQueries: [String] {
         switch self {
         case .athlete:
-            return ["calm ocean waves", "still lake reflection", "zen water ripple", "peaceful sunrise nature"]
+            // Very serene — still water, mist, dawn
+            return ["still lake misty morning", "calm water reflection nature", "peaceful forest dawn", "tranquil pond nature"]
         case .excellent:
-            return ["mountain landscape aerial", "open water lake aerial", "coastal path landscape", "forest trail aerial"]
+            // Gentle nature — flowing streams, soft light
+            return ["gentle stream forest", "meadow nature aerial", "coastal cliffs landscape", "rolling hills nature aerial"]
         case .good:
-            return ["mountain summit panorama", "ocean surf waves", "river flowing landscape", "countryside aerial view"]
+            // Moderate nature — rivers, coastal scenery
+            return ["river flowing nature", "ocean coast landscape", "valley nature aerial", "forest canopy aerial"]
         case .average:
-            return ["stadium lights empty", "city marathon aerial", "sports arena overhead", "racetrack aerial view"]
+            // Dynamic nature — ocean waves, waterfalls
+            return ["ocean waves crashing nature", "waterfall nature landscape", "mountain river rapids", "stormy sea waves"]
         case .high:
-            return ["concert stage lights", "festival lights aerial", "city nightlife aerial", "fireworks night sky"]
+            // Intense nature — storms, crashing surf, lightning
+            return ["lightning storm nature", "crashing waves storm", "thunderstorm nature landscape", "wild ocean storm waves"]
         }
     }
 

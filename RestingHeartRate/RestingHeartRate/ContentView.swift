@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var pexels = PexelsService()
     @State private var videoURL: URL? = nil
     @State private var videoCreator: String? = nil
+    @State private var isLoadingVideo = false
     @State private var currentZone: HRZone? = nil
 
     var body: some View {
@@ -53,6 +54,14 @@ struct ContentView: View {
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
+
+                if isLoadingVideo {
+                    Color.black.opacity(0.30)
+                        .ignoresSafeArea()
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.4)
+                }
             }
         }
         .task { await initialize() }
@@ -227,13 +236,13 @@ struct ContentView: View {
 
     // MARK: - Creator Credit
 
-    @ViewBuilder
+    // Always in the layout so the bottom of the screen never jumps.
+    // Invisible while loading or before the first video loads.
     private var creatorCredit: some View {
-        if let creator = videoCreator {
-            Text("Video by \(creator) · Pexels")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.40))
-        }
+        Text(videoCreator.map { "Video by \($0) · Pexels" } ?? " ")
+            .font(.caption2)
+            .foregroundStyle(.white.opacity(0.40))
+            .opacity(isLoadingVideo || videoCreator == nil ? 0 : 1)
     }
 
     // MARK: - Logic
@@ -263,6 +272,8 @@ struct ContentView: View {
     }
 
     private func loadVideo(for zone: HRZone) async {
+        isLoadingVideo = true
+        defer { isLoadingVideo = false }
         do {
             let result = try await pexels.fetchVideo(for: zone)
             withAnimation(.easeInOut(duration: 0.6)) {
