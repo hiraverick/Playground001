@@ -20,6 +20,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>This app reads your resting heart rate from the Health app to display it on screen.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>This app does not write any health data.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
