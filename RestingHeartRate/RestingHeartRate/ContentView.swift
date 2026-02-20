@@ -170,18 +170,26 @@ struct ContentView: View {
     // MARK: - Auth Card
 
     private var authCard: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "heart.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.red)
+        VStack(spacing: 14) {
+            // Icon pill — mirrors the zone pill treatment
+            ZStack {
+                Circle()
+                    .fill(.red.opacity(0.18))
+                    .frame(width: 72, height: 72)
+                    .overlay(Circle().strokeBorder(.red.opacity(0.35), lineWidth: 1))
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.red)
+            }
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text("Health Access Required")
-                    .font(.system(.headline, design: .rounded))
+                    .font(.system(.title3, design: .rounded, weight: .bold))
                     .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 3)
                 Text("Allow this app to read your resting\nheart rate from the Health app.")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.70))
+                    .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
             }
 
@@ -205,15 +213,14 @@ struct ContentView: View {
                 .font(.system(.body, design: .rounded, weight: .semibold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.red, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(Color.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .foregroundStyle(.white)
             }
             .disabled(healthKit.isLoading)
-            .padding(.horizontal, 32)
+            .padding(.top, 6)
         }
-        .padding(32)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .padding(.horizontal, 32)
+        .padding(.horizontal, 40)
+        .multilineTextAlignment(.center)
     }
 
     // MARK: - Logic
@@ -224,6 +231,9 @@ struct ContentView: View {
             let zone = HRZone(bpm: bpm)
             currentZone = zone
             await loadVideo(for: zone)
+        } else {
+            // Load a neutral video behind the auth screen
+            await loadVideo(for: .good)
         }
     }
 
