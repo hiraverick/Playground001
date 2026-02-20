@@ -1,99 +1,135 @@
 import SwiftUI
 
 struct ContentView: View {
+
+    // MARK: - State
+
     @State private var healthKit = HealthKitManager()
-    @State private var pexels = PexelsService()
-    @State private var videoURL: URL? = nil
-    @State private var videoCreator: String? = nil
+    @State private var videoURL: URL?
+    @State private var videoCreator: String?
     @State private var isLoadingVideo = false
-    @State private var currentZone: HRZone? = nil
-    @State private var currentVideoTask: Task<Void, Never>? = nil
     @State private var didInitialize = false
 
+    // Custom pull-to-refresh (bypasses Dynamic Island gesture gate entirely)
+    @State private var pullOffset: CGFloat = 0
+    @State private var isRefreshing = false
+
+    private let pexels = PexelsService()
+    private let pullThreshold: CGFloat = 80
+
+    // MARK: - Body
+
     var body: some View {
-        // NavigationStack gives the embedded ScrollView a proper UINavigationController
-        // context so UIRefreshControl gesture coordination works correctly near
-        // the Dynamic Island, instead of being intercepted by the system gate.
-        NavigationStack {
-            GeometryReader { geo in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        header
-                            .padding(.horizontal, 24)
-                            .padding(.top, 20)
+        ZStack {
+            // ── Background ──────────────────────────────────────
+            Color.black.ignoresSafeArea()
 
-                        Spacer(minLength: 0)
-
-                        if healthKit.isAuthorized {
-                            bpmOverlay
-                        } else {
-                            authCard
-                        }
-
-                        Spacer(minLength: 0)
-
-                        creatorCredit
-                            .padding(.bottom, 12)
-                    }
-                    // Explicit frame prevents containerRelativeFrame from
-                    // getting infinite height on the scrolling axis, which
-                    // would stop the scroll view from knowing its content
-                    // fits — breaking the top-bounce/pull-to-refresh trigger.
-                    .frame(width: geo.size.width, height: geo.size.height)
-                }
-                .scrollBounceBehavior(.always)
-                .scrollIndicators(.hidden)
-                .refreshable { await refresh() }
-                .background {
-                    ZStack {
-                        if let url = videoURL {
-                            VideoPlayerView(url: url)
-                                .ignoresSafeArea()
-                                .transition(.opacity)
-                        } else {
-                            Color.black.ignoresSafeArea()
-                        }
-
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black.opacity(0.55), location: 0.00),
-                                .init(color: .black.opacity(0.10), location: 0.35),
-                                .init(color: .black.opacity(0.10), location: 0.65),
-                                .init(color: .black.opacity(0.65), location: 1.00),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .ignoresSafeArea()
-
-                        if isLoadingVideo {
-                            Color.black.opacity(0.30)
-                                .ignoresSafeArea()
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(1.4)
-                        }
-                    }
-                }
+            if let url = videoURL {
+                VideoPlayerView(url: url)
+                    .ignoresSafeArea()
             }
-            .ignoresSafeArea(edges: .bottom)
-            .toolbar(.hidden, for: .navigationBar)
+
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.55), location: 0.00),
+                    .init(color: .black.opacity(0.10), location: 0.35),
+                    .init(color: .black.opacity(0.10), location: 0.65),
+                    .init(color: .black.opacity(0.65), location: 1.00),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Loading overlay (initial load only, not during pull-refresh)
+            if isLoadingVideo, !isRefreshing {
+                Color.black.opacity(0.3).ignoresSafeArea()
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.3)
+            }
+
+            // ── Content ─────────────────────────────────────────
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+
+                Spacer(minLength: 0)
+
+                if healthKit.isAuthorized {
+                    bpmOverlay
+                } else {
+                    authCard
+                }
+
+                Spacer(minLength: 0)
+
+                creatorCredit
+                    .padding(.bottom, 8)
+            }
+            .offset(y: pullContentOffset)
+
+            // ── Pull indicator ───────────────────────────────────
+            VStack {
+                if isRefreshing || pullOffset > 15 {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(isRefreshing ? 1 : min(pullOffset / pullThreshold, 1))
+                        .opacity(isRefreshing ? 1 : Double(min(pullOffset / 30, 1)))
+                        .padding(.top, 56)
+                }
+                Spacer()
+            }
         }
+        .gesture(pullGesture)
         .task { await initialize() }
-        .onChange(of: healthKit.restingHeartRate) { _, bpm in
-            guard let bpm else { return }
-            let zone = HRZone(bpm: bpm)
-            // Only fire when zone actually changes (not every BPM tick)
-            // and only after initialization, to avoid a double-load race
-            // with refresh() which also sets currentZone before calling loadVideo.
-            if zone != currentZone, didInitialize {
-                currentZone = zone
-                scheduleVideoLoad(for: zone)
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             guard didInitialize else { return }
             Task { await refresh() }
+        }
+    }
+
+    // MARK: - Pull-to-Refresh Gesture
+
+    /// Rubber-band offset for the content while pulling.
+    private var pullContentOffset: CGFloat {
+        if isRefreshing { return 30 }
+        guard pullOffset > 0 else { return 0 }
+        return pullOffset * 0.35
+    }
+
+    private var pullGesture: some Gesture {
+        DragGesture(minimumDistance: 15)
+            .onChanged { value in
+                guard !isRefreshing else { return }
+                let dy = value.translation.height
+                guard dy > 0 else { pullOffset = 0; return }
+                // Diminishing pull: feels like elastic rubber-band
+                pullOffset = dy * 0.55
+            }
+            .onEnded { _ in
+                guard !isRefreshing else { return }
+                if pullOffset >= pullThreshold {
+                    triggerRefresh()
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        pullOffset = 0
+                    }
+                }
+            }
+    }
+
+    private func triggerRefresh() {
+        isRefreshing = true
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            pullOffset = 0
+        }
+        Task {
+            await refresh()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                isRefreshing = false
+            }
         }
     }
 
@@ -117,14 +153,13 @@ struct ContentView: View {
 
     @ViewBuilder
     private var bpmOverlay: some View {
-        if healthKit.isLoading && healthKit.restingHeartRate == nil {
+        if healthKit.isLoading, healthKit.restingHeartRate == nil {
             ProgressView()
                 .tint(.white)
                 .scaleEffect(1.5)
         } else if let bpm = healthKit.restingHeartRate {
             let zone = HRZone(bpm: bpm)
             VStack(spacing: 10) {
-
                 Text(zone.label.uppercased())
                     .font(.system(.caption, design: .rounded, weight: .bold))
                     .kerning(2.5)
@@ -251,7 +286,6 @@ struct ContentView: View {
 
     // MARK: - Creator Credit
 
-    // Always in the layout tree so the bottom of the screen never jumps.
     private var creatorCredit: some View {
         Text(videoCreator.map { "Video by \($0) · Pexels" } ?? " ")
             .font(.caption2)
@@ -263,41 +297,18 @@ struct ContentView: View {
 
     private func initialize() async {
         await healthKit.initialize()
-        let zone: HRZone
-        if let bpm = healthKit.restingHeartRate {
-            zone = HRZone(bpm: bpm)
-        } else {
-            zone = .good
-        }
-        currentZone = zone
+        let zone = healthKit.restingHeartRate.map(HRZone.init) ?? .good
         await loadVideo(for: zone)
         didInitialize = true
     }
 
     private func refresh() async {
         await healthKit.fetchRestingHeartRate()
-        let zone: HRZone
-        if let bpm = healthKit.restingHeartRate {
-            zone = HRZone(bpm: bpm)
-        } else {
-            zone = currentZone ?? .good
-        }
-        // Set currentZone before loadVideo so that the onChange watcher
-        // (which may fire during the await below) sees the updated zone
-        // and skips its own redundant loadVideo call.
-        currentZone = zone
+        let zone = healthKit.restingHeartRate.map(HRZone.init) ?? .good
         await loadVideo(for: zone)
     }
 
-    /// Kicks off a video load without awaiting it (for use from non-async contexts).
-    private func scheduleVideoLoad(for zone: HRZone) {
-        currentVideoTask?.cancel()
-        currentVideoTask = Task { await loadVideo(for: zone) }
-    }
-
-    /// Loads a fresh video, cancelling any in-flight fetch first.
     private func loadVideo(for zone: HRZone) async {
-        currentVideoTask?.cancel()
         isLoadingVideo = true
         defer { isLoadingVideo = false }
         do {
@@ -308,7 +319,7 @@ struct ContentView: View {
                 videoCreator = result.creator
             }
         } catch {
-            // Keep existing video on failure; isLoadingVideo clears via defer
+            // Keep existing video on failure
         }
     }
 }

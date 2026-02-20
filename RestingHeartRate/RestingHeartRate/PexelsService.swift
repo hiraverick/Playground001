@@ -23,6 +23,7 @@ struct PexelsService {
 
         var request = URLRequest(url: components.url!)
         request.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
 
         let (data, response) = try await URLSession.shared.data(for: request)
 

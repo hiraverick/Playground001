@@ -1,18 +1,19 @@
 import SwiftUI
 import AVKit
 
-/// A full-bleed, muted, infinitely-looping video player.
 struct VideoPlayerView: UIViewRepresentable {
     let url: URL
 
     func makeUIView(context: Context) -> LoopingPlayerView {
-        let view = LoopingPlayerView()
-        view.play(url: url)
-        return view
+        LoopingPlayerView()
     }
 
     func updateUIView(_ uiView: LoopingPlayerView, context: Context) {
         uiView.play(url: url)
+    }
+
+    static func dismantleUIView(_ uiView: LoopingPlayerView, coordinator: ()) {
+        uiView.stop()
     }
 }
 
@@ -21,18 +22,20 @@ struct VideoPlayerView: UIViewRepresentable {
 final class LoopingPlayerView: UIView {
 
     private let playerLayer = AVPlayerLayer()
-    private var queuePlayer: AVQueuePlayer?
+    private var player: AVQueuePlayer?
     private var looper: AVPlayerLooper?
     private var currentURL: URL?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        backgroundColor = .black
         playerLayer.videoGravity = .resizeAspectFill
-        playerLayer.backgroundColor = UIColor.black.cgColor
         layer.addSublayer(playerLayer)
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    deinit { tearDown() }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -43,24 +46,40 @@ final class LoopingPlayerView: UIView {
         guard url != currentURL else { return }
         currentURL = url
 
-        // Stop previous playback
-        queuePlayer?.pause()
+        tearDown()
 
         let item = AVPlayerItem(url: url)
-        let player = AVQueuePlayer()
-        player.isMuted = true
-        let loop = AVPlayerLooper(player: player, templateItem: item)
+        item.preferredForwardBufferDuration = 5
 
-        // Crossfade between videos
+        let newPlayer = AVQueuePlayer()
+        newPlayer.isMuted = true
+        newPlayer.automaticallyWaitsToMinimizeStalling = true
+
+        let newLooper = AVPlayerLooper(player: newPlayer, templateItem: item)
+
         let fade = CATransition()
-        fade.duration = 0.9
+        fade.duration = 0.8
         fade.type = .fade
         playerLayer.add(fade, forKey: "videoFade")
 
-        playerLayer.player = player
-        player.play()
+        playerLayer.player = newPlayer
+        newPlayer.play()
 
-        self.queuePlayer = player
-        self.looper = loop
+        player = newPlayer
+        looper = newLooper
+    }
+
+    func stop() {
+        tearDown()
+        currentURL = nil
+    }
+
+    private func tearDown() {
+        looper?.disableLooping()
+        looper = nil
+        player?.pause()
+        player?.removeAllItems()
+        playerLayer.player = nil
+        player = nil
     }
 }
