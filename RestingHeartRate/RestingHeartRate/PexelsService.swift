@@ -22,11 +22,16 @@ struct PexelsService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        print("🌐 Pexels API status: \(statusCode) for query: \(query)")
+
+        guard statusCode == 200 else {
+            print("🌐 Pexels response body: \(String(data: data, encoding: .utf8) ?? "nil")")
             throw PexelsError.badResponse
         }
 
         let decoded = try JSONDecoder().decode(PexelsResponse.self, from: data)
+        print("🌐 Pexels returned \(decoded.videos.count) videos")
 
         guard let video = decoded.videos.randomElement() else {
             throw PexelsError.noVideos

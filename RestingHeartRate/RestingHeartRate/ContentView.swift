@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var pexels = PexelsService()
     @State private var videoURL: URL? = nil
     @State private var currentZone: HRZone? = nil
+    @State private var videoError: String? = nil
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -46,6 +47,15 @@ struct ContentView: View {
                         }
 
                         Spacer(minLength: 0)
+
+                        if let err = videoError {
+                            Text(err)
+                                .font(.caption2)
+                                .foregroundStyle(.orange.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 12)
+                        }
                     }
                     .frame(minHeight: geo.size.height)
                 }
@@ -246,12 +256,15 @@ struct ContentView: View {
 
     private func loadVideo(for zone: HRZone) async {
         do {
+            videoError = nil
             let url = try await pexels.fetchVideoURL(for: zone)
+            print("🎬 Video URL: \(url)")
             withAnimation(.easeInOut(duration: 0.6)) {
                 videoURL = url
             }
         } catch {
-            // Keep existing video on failure; black background if none loaded yet
+            print("❌ Video load failed: \(error)")
+            videoError = "Video: \(error.localizedDescription)"
         }
     }
 }
