@@ -2,43 +2,65 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var healthKit = HealthKitManager()
+    @State private var pexels = PexelsService()
+    @State private var videoURL: URL? = nil
+    @State private var currentZone: HRZone? = nil
+    @State private var isRefreshing = false
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                LinearGradient(
-                    colors: [Color(.systemBackground), Color.red.opacity(0.04)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+        ZStack {
+            // MARK: Background video
+            if let url = videoURL {
+                VideoPlayerView(url: url)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            } else {
+                Color.black.ignoresSafeArea()
+            }
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        header
-                            .padding(.horizontal, 24)
-                            .padding(.top, 16)
+            // MARK: Gradient overlay — darkens edges, keeps centre readable
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.55), location: 0.00),
+                    .init(color: .black.opacity(0.10), location: 0.35),
+                    .init(color: .black.opacity(0.10), location: 0.65),
+                    .init(color: .black.opacity(0.65), location: 1.00),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
-                        Spacer(minLength: 0)
+            // MARK: Content
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
 
-                        if healthKit.isAuthorized {
-                            heartRateCard
-                                .padding(.horizontal, 20)
-                        } else {
-                            authorizationPrompt
-                                .padding(.horizontal, 20)
-                        }
+                Spacer()
 
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minHeight: geo.size.height)
+                if healthKit.isAuthorized {
+                    bpmOverlay
+                } else {
+                    authCard
                 }
-                .refreshable {
-                    await healthKit.fetchRestingHeartRate()
-                }
+
+                Spacer()
+
+                bottomBar
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 32)
             }
         }
-        .task { await healthKit.initialize() }
+        .task { await initialize() }
+        .onChange(of: healthKit.restingHeartRate) { _, bpm in
+            guard let bpm else { return }
+            let zone = HRZone(bpm: bpm)
+            if zone != currentZone {
+                currentZone = zone
+                Task { await loadVideo(for: zone) }
+            }
+        }
     }
 
     // MARK: - Header
@@ -47,95 +69,84 @@ struct ContentView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Biometrics")
-                    .font(.largeTitle.bold())
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
                 Text(Date.now, format: .dateTime.weekday(.wide).month(.wide).day())
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.65))
             }
             Spacer()
         }
     }
 
-    // MARK: - Heart Rate Card
-
-    private var heartRateCard: some View {
-        VStack(spacing: 28) {
-            heartIcon
-            label
-            heartRateDisplay
-            Divider().padding(.horizontal, 16)
-            statusRow
-        }
-        .padding(.vertical, 36)
-        .padding(.horizontal, 28)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.background)
-                .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 8)
-        }
-    }
-
-    private var heartIcon: some View {
-        ZStack {
-            Circle()
-                .fill(Color.red.opacity(0.1))
-                .frame(width: 72, height: 72)
-
-            if let bpm = healthKit.restingHeartRate, !healthKit.isLoading {
-                HeartbeatIcon(bpm: bpm)
-            } else {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.red)
-                    .symbolEffect(.pulse, isActive: healthKit.isLoading)
-            }
-        }
-    }
-
-    private var label: some View {
-        Text("Resting Heart Rate")
-            .font(.system(.subheadline, design: .rounded, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .kerning(1.2)
-    }
+    // MARK: - BPM Overlay
 
     @ViewBuilder
-    private var heartRateDisplay: some View {
-        if healthKit.isLoading {
+    private var bpmOverlay: some View {
+        if healthKit.isLoading && healthKit.restingHeartRate == nil {
             ProgressView()
-                .tint(.red)
-                .scaleEffect(1.4)
-                .frame(height: 90)
+                .tint(.white)
+                .scaleEffect(1.5)
         } else if let bpm = healthKit.restingHeartRate {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(Int(bpm))")
-                    .font(.system(size: 88, weight: .bold, design: .rounded))
-                    .contentTransition(.numericText())
-                    .foregroundStyle(.primary)
-                    .animation(.spring(duration: 0.4), value: bpm)
+            let zone = HRZone(bpm: bpm)
+            VStack(spacing: 10) {
 
-                Text("BPM")
-                    .font(.system(.title3, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 12)
+                // Zone pill
+                Text(zone.label.uppercased())
+                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .kerning(2.5)
+                    .foregroundStyle(zone.color)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(zone.color.opacity(0.18), in: Capsule())
+                    .overlay(Capsule().strokeBorder(zone.color.opacity(0.55), lineWidth: 1))
+
+                // BPM number
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(Int(bpm))")
+                        .font(.system(size: 108, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText())
+                        .animation(.spring(duration: 0.4), value: bpm)
+                        .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 4)
+
+                    Text("BPM")
+                        .font(.system(.title2, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .padding(.bottom, 14)
+                }
+
+                // Label
+                Text("Resting Heart Rate")
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.60))
+                    .textCase(.uppercase)
+                    .kerning(1.2)
+
+                // Status
+                statusLabel
+                    .padding(.top, 6)
             }
-        } else {
-            Text("—")
-                .font(.system(size: 88, weight: .ultraLight, design: .rounded))
-                .foregroundStyle(.tertiary)
-                .frame(height: 90)
+            .multilineTextAlignment(.center)
+
+        } else if !healthKit.isLoading {
+            VStack(spacing: 12) {
+                Text("—")
+                    .font(.system(size: 108, weight: .ultraLight, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.35))
+                Text("No data available")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
+            }
         }
     }
 
     @ViewBuilder
-    private var statusRow: some View {
+    private var statusLabel: some View {
         if let error = healthKit.errorMessage {
             Label(error, systemImage: "exclamationmark.triangle.fill")
                 .font(.footnote)
                 .foregroundStyle(.orange)
-                .multilineTextAlignment(.center)
-
         } else if healthKit.restingHeartRate != nil {
             if healthKit.isReadingFromToday {
                 Label("Measured today", systemImage: "checkmark.circle.fill")
@@ -148,35 +159,50 @@ struct ContentView: View {
                     Image(systemName: "clock")
                 }
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
-            }
-
-        } else if !healthKit.isLoading {
-            VStack(spacing: 6) {
-                Text("No data available")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Text("Sync your Apple Watch to the Health app,\nor wait for tonight's sleep analysis.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.60))
             }
         }
     }
 
-    // MARK: - Authorization Prompt
+    // MARK: - Bottom Bar (refresh)
 
-    private var authorizationPrompt: some View {
-        VStack(spacing: 28) {
-            heartIcon
-            label
+    private var bottomBar: some View {
+        HStack {
+            Spacer()
+            Button {
+                Task { await refresh() }
+            } label: {
+                Group {
+                    if isRefreshing {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.70))
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: Circle())
+            }
+            .disabled(isRefreshing)
+        }
+    }
 
-            VStack(spacing: 12) {
+    // MARK: - Auth Card
+
+    private var authCard: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.red)
+
+            VStack(spacing: 8) {
                 Text("Health Access Required")
                     .font(.system(.headline, design: .rounded))
-                Text("Tap below to allow this app to read your resting heart rate from the Health app.")
+                    .foregroundStyle(.white)
+                Text("Allow this app to read your resting\nheart rate from the Health app.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.70))
                     .multilineTextAlignment(.center)
             }
 
@@ -184,7 +210,6 @@ struct ContentView: View {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)
                     .foregroundStyle(.orange)
-                    .multilineTextAlignment(.center)
             }
 
             Button {
@@ -205,41 +230,42 @@ struct ContentView: View {
                 .foregroundStyle(.white)
             }
             .disabled(healthKit.isLoading)
+            .padding(.horizontal, 32)
         }
-        .padding(.vertical, 36)
-        .padding(.horizontal, 28)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.background)
-                .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 8)
+        .padding(32)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 32)
+    }
+
+    // MARK: - Logic
+
+    private func initialize() async {
+        await healthKit.initialize()
+        if let bpm = healthKit.restingHeartRate {
+            let zone = HRZone(bpm: bpm)
+            currentZone = zone
+            await loadVideo(for: zone)
         }
     }
-}
 
-// MARK: - Heartbeat Animation
+    private func refresh() async {
+        isRefreshing = true
+        await healthKit.fetchRestingHeartRate()
+        if let bpm = healthKit.restingHeartRate {
+            await loadVideo(for: HRZone(bpm: bpm))
+        }
+        isRefreshing = false
+    }
 
-private struct HeartbeatIcon: View {
-    let bpm: Double
-
-    var body: some View {
-        let beatDuration = 60.0 / bpm
-        let restDuration = max(0.05, beatDuration - 0.4)
-
-        Image(systemName: "heart.fill")
-            .font(.system(size: 32))
-            .foregroundStyle(.red)
-            .keyframeAnimator(
-                initialValue: CGFloat(1.0),
-                repeating: true
-            ) { content, scale in
-                content.scaleEffect(scale)
-            } keyframes: { _ in
-                CubicKeyframe(1.3,  duration: 0.10) // lub up
-                CubicKeyframe(1.0,  duration: 0.12) // lub down
-                CubicKeyframe(1.18, duration: 0.08) // dub up
-                CubicKeyframe(1.0,  duration: 0.10) // dub down
-                LinearKeyframe(1.0, duration: restDuration) // rest
+    private func loadVideo(for zone: HRZone) async {
+        do {
+            let url = try await pexels.fetchVideoURL(for: zone)
+            withAnimation(.easeInOut(duration: 0.6)) {
+                videoURL = url
             }
+        } catch {
+            // Keep existing video on failure; black background if none loaded yet
+        }
     }
 }
 
