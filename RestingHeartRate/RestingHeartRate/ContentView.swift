@@ -5,53 +5,56 @@ struct ContentView: View {
     @State private var pexels = PexelsService()
     @State private var videoURL: URL? = nil
     @State private var currentZone: HRZone? = nil
-    @State private var isRefreshing = false
-
     var body: some View {
-        ZStack {
-            // MARK: Background video
-            if let url = videoURL {
-                VideoPlayerView(url: url)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-            } else {
-                Color.black.ignoresSafeArea()
-            }
-
-            // MARK: Gradient overlay — darkens edges, keeps centre readable
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.55), location: 0.00),
-                    .init(color: .black.opacity(0.10), location: 0.35),
-                    .init(color: .black.opacity(0.10), location: 0.65),
-                    .init(color: .black.opacity(0.65), location: 1.00),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            // MARK: Content
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-
-                Spacer()
-
-                if healthKit.isAuthorized {
-                    bpmOverlay
+        GeometryReader { geo in
+            ZStack {
+                // MARK: Background video
+                if let url = videoURL {
+                    VideoPlayerView(url: url)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
                 } else {
-                    authCard
+                    Color.black.ignoresSafeArea()
                 }
 
-                Spacer()
+                // MARK: Gradient overlay — darkens edges, keeps centre readable
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.55), location: 0.00),
+                        .init(color: .black.opacity(0.10), location: 0.35),
+                        .init(color: .black.opacity(0.10), location: 0.65),
+                        .init(color: .black.opacity(0.65), location: 1.00),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
-                bottomBar
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 32)
+                // MARK: Content
+                ScrollView {
+                    VStack(spacing: 0) {
+                        header
+                            .padding(.horizontal, 24)
+                            .padding(.top, 20)
+
+                        Spacer(minLength: 0)
+
+                        if healthKit.isAuthorized {
+                            bpmOverlay
+                        } else {
+                            authCard
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: geo.size.height)
+                }
+                .refreshable {
+                    await refresh()
+                }
             }
         }
+        .ignoresSafeArea(edges: .bottom)
         .task { await initialize() }
         .onChange(of: healthKit.restingHeartRate) { _, bpm in
             guard let bpm else { return }
@@ -164,30 +167,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Bottom Bar (refresh)
-
-    private var bottomBar: some View {
-        HStack {
-            Spacer()
-            Button {
-                Task { await refresh() }
-            } label: {
-                Group {
-                    if isRefreshing {
-                        ProgressView().tint(.white)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.70))
-                    }
-                }
-                .frame(width: 40, height: 40)
-                .background(.ultraThinMaterial, in: Circle())
-            }
-            .disabled(isRefreshing)
-        }
-    }
-
     // MARK: - Auth Card
 
     private var authCard: some View {
@@ -249,12 +228,10 @@ struct ContentView: View {
     }
 
     private func refresh() async {
-        isRefreshing = true
         await healthKit.fetchRestingHeartRate()
         if let bpm = healthKit.restingHeartRate {
             await loadVideo(for: HRZone(bpm: bpm))
         }
-        isRefreshing = false
     }
 
     private func loadVideo(for zone: HRZone) async {
