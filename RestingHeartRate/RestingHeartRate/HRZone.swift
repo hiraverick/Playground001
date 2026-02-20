@@ -31,15 +31,15 @@ enum HRZone: Equatable {
     var searchQueries: [String] {
         switch self {
         case .athlete:
-            return ["yoga meditation", "tai chi slow", "floating water calm", "breathwork nature"]
+            return ["calm ocean waves", "still lake reflection", "zen water ripple", "peaceful sunrise nature"]
         case .excellent:
-            return ["cycling nature trail", "swimming pool", "slow jogging park", "rowing calm water"]
+            return ["mountain landscape aerial", "open water lake aerial", "coastal path landscape", "forest trail aerial"]
         case .good:
-            return ["hiking mountain trail", "outdoor running", "dance performance", "surf ocean wave"]
+            return ["mountain summit panorama", "ocean surf waves", "river flowing landscape", "countryside aerial view"]
         case .average:
-            return ["gym workout training", "running stadium", "basketball court", "crossfit athletes"]
+            return ["stadium lights empty", "city marathon aerial", "sports arena overhead", "racetrack aerial view"]
         case .high:
-            return ["concert crowd energy", "sprint race track", "music festival crowd", "extreme sports adrenaline"]
+            return ["concert stage lights", "festival lights aerial", "city nightlife aerial", "fireworks night sky"]
         }
     }
 

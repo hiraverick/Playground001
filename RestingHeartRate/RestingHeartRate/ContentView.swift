@@ -6,56 +6,53 @@ struct ContentView: View {
     @State private var videoURL: URL? = nil
     @State private var currentZone: HRZone? = nil
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // MARK: Background video
-                if let url = videoURL {
-                    VideoPlayerView(url: url)
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
+        ZStack {
+            // MARK: Background video
+            if let url = videoURL {
+                VideoPlayerView(url: url)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            } else {
+                Color.black.ignoresSafeArea()
+            }
 
-                // MARK: Gradient overlay — darkens edges, keeps centre readable
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.55), location: 0.00),
-                        .init(color: .black.opacity(0.10), location: 0.35),
-                        .init(color: .black.opacity(0.10), location: 0.65),
-                        .init(color: .black.opacity(0.65), location: 1.00),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+            // MARK: Gradient overlay — darkens edges, keeps centre readable
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.55), location: 0.00),
+                    .init(color: .black.opacity(0.10), location: 0.35),
+                    .init(color: .black.opacity(0.10), location: 0.65),
+                    .init(color: .black.opacity(0.65), location: 1.00),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
-                // MARK: Content
-                ScrollView {
-                    VStack(spacing: 0) {
-                        header
-                            .padding(.horizontal, 24)
-                            .padding(.top, 20)
+            // MARK: Content
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
 
-                        Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                        if healthKit.isAuthorized {
-                            bpmOverlay
-                        } else {
-                            authCard
-                        }
-
-                        Spacer(minLength: 0)
+                    if healthKit.isAuthorized {
+                        bpmOverlay
+                    } else {
+                        authCard
                     }
-                    .frame(minHeight: geo.size.height)
+
+                    Spacer(minLength: 0)
                 }
-                .scrollBounceBehavior(.always)
-                .refreshable {
-                    await refresh()
-                }
+                .containerRelativeFrame([.horizontal, .vertical])
+            }
+            .scrollBounceBehavior(.always)
+            .refreshable {
+                await refresh()
             }
         }
-        .ignoresSafeArea(edges: .bottom)
         .task { await initialize() }
         .onChange(of: healthKit.restingHeartRate) { _, bpm in
             guard let bpm else { return }
