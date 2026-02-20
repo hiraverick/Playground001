@@ -5,6 +5,8 @@ struct ContentView: View {
     @State private var pexels = PexelsService()
     @State private var videoURL: URL? = nil
     @State private var currentZone: HRZone? = nil
+    @State private var isRefreshing = false
+
     var body: some View {
         ZStack {
             // MARK: Background video
@@ -16,7 +18,7 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
             }
 
-            // MARK: Gradient overlay — darkens edges, keeps centre readable
+            // MARK: Gradient overlay
             LinearGradient(
                 stops: [
                     .init(color: .black.opacity(0.55), location: 0.00),
@@ -30,27 +32,20 @@ struct ContentView: View {
             .ignoresSafeArea()
 
             // MARK: Content
-            ScrollView {
-                VStack(spacing: 0) {
-                    header
-                        .padding(.horizontal, 24)
-                        .padding(.top, 20)
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
 
-                    Spacer(minLength: 0)
+                Spacer()
 
-                    if healthKit.isAuthorized {
-                        bpmOverlay
-                    } else {
-                        authCard
-                    }
-
-                    Spacer(minLength: 0)
+                if healthKit.isAuthorized {
+                    bpmOverlay
+                } else {
+                    authCard
                 }
-                .containerRelativeFrame([.horizontal, .vertical])
-            }
-            .scrollBounceBehavior(.always)
-            .refreshable {
-                await refresh()
+
+                Spacer()
             }
         }
         .task { await initialize() }
@@ -61,6 +56,10 @@ struct ContentView: View {
                 currentZone = zone
                 Task { await loadVideo(for: zone) }
             }
+        }
+        // Auto-refresh when app returns to foreground
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            Task { await refresh() }
         }
     }
 
@@ -77,6 +76,22 @@ struct ContentView: View {
                     .foregroundStyle(.white.opacity(0.65))
             }
             Spacer()
+            Button {
+                Task { await refresh() }
+            } label: {
+                Group {
+                    if isRefreshing {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.70))
+                    }
+                }
+                .frame(width: 36, height: 36)
+                .background(.ultraThinMaterial, in: Circle())
+            }
+            .disabled(isRefreshing)
         }
     }
 
@@ -169,7 +184,6 @@ struct ContentView: View {
 
     private var authCard: some View {
         VStack(spacing: 14) {
-            // Icon pill — mirrors the zone pill treatment
             ZStack {
                 Circle()
                     .fill(.red.opacity(0.18))
@@ -230,16 +244,18 @@ struct ContentView: View {
             currentZone = zone
             await loadVideo(for: zone)
         } else {
-            // Load a neutral video behind the auth screen
             await loadVideo(for: .good)
         }
     }
 
     private func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
         await healthKit.fetchRestingHeartRate()
         if let bpm = healthKit.restingHeartRate {
             await loadVideo(for: HRZone(bpm: bpm))
         }
+        isRefreshing = false
     }
 
     private func loadVideo(for zone: HRZone) async {
@@ -249,7 +265,7 @@ struct ContentView: View {
                 videoURL = url
             }
         } catch {
-            // Keep existing video on failure; black background if none loaded yet
+            // Keep existing video on failure
         }
     }
 }
