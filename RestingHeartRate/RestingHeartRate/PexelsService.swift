@@ -1,12 +1,17 @@
 import Foundation
 
+struct VideoResult {
+    let url: URL
+    let creator: String
+}
+
 struct PexelsService {
 
     private let apiKey = "BtVtCdVT27bQX5xAzuGhH5kV9bTUC6Q0UXEXmctbMoNMM6A4NTkuxveD"
     private let baseURL = "https://api.pexels.com/videos/search"
 
-    /// Picks a random search query for the zone and returns a streaming video URL.
-    func fetchVideoURL(for zone: HRZone) async throws -> URL {
+    /// Picks a random search query for the zone and returns a streaming video URL + creator name.
+    func fetchVideo(for zone: HRZone) async throws -> VideoResult {
         let query = zone.searchQueries.randomElement() ?? "nature"
 
         var components = URLComponents(string: baseURL)!
@@ -42,7 +47,7 @@ struct PexelsService {
             throw PexelsError.noVideoFile
         }
 
-        return url
+        return VideoResult(url: url, creator: video.user.name)
     }
 }
 
@@ -70,10 +75,16 @@ private struct PexelsResponse: Decodable {
 
 private struct PexelsVideo: Decodable {
     let videoFiles: [PexelsVideoFile]
+    let user: PexelsUser
 
     enum CodingKeys: String, CodingKey {
         case videoFiles = "video_files"
+        case user
     }
+}
+
+private struct PexelsUser: Decodable {
+    let name: String
 }
 
 private struct PexelsVideoFile: Decodable {

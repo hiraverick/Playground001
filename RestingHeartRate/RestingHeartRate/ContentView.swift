@@ -4,40 +4,17 @@ struct ContentView: View {
     @State private var healthKit = HealthKitManager()
     @State private var pexels = PexelsService()
     @State private var videoURL: URL? = nil
+    @State private var videoCreator: String? = nil
     @State private var currentZone: HRZone? = nil
-    @State private var isRefreshing = false
 
     var body: some View {
-        ZStack {
-            // MARK: Background video
-            if let url = videoURL {
-                VideoPlayerView(url: url)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-            } else {
-                Color.black.ignoresSafeArea()
-            }
-
-            // MARK: Gradient overlay
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.55), location: 0.00),
-                    .init(color: .black.opacity(0.10), location: 0.35),
-                    .init(color: .black.opacity(0.10), location: 0.65),
-                    .init(color: .black.opacity(0.65), location: 1.00),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            // MARK: Content
+        ScrollView {
             VStack(spacing: 0) {
                 header
                     .padding(.horizontal, 24)
                     .padding(.top, 20)
 
-                Spacer()
+                Spacer(minLength: 0)
 
                 if healthKit.isAuthorized {
                     bpmOverlay
@@ -45,7 +22,37 @@ struct ContentView: View {
                     authCard
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
+
+                creatorCredit
+                    .padding(.bottom, 12)
+            }
+            .containerRelativeFrame([.horizontal, .vertical])
+        }
+        .scrollBounceBehavior(.always)
+        .scrollIndicators(.hidden)
+        .refreshable { await refresh() }
+        .background {
+            ZStack {
+                if let url = videoURL {
+                    VideoPlayerView(url: url)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                } else {
+                    Color.black.ignoresSafeArea()
+                }
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.55), location: 0.00),
+                        .init(color: .black.opacity(0.10), location: 0.35),
+                        .init(color: .black.opacity(0.10), location: 0.65),
+                        .init(color: .black.opacity(0.65), location: 1.00),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
             }
         }
         .task { await initialize() }
@@ -57,7 +64,6 @@ struct ContentView: View {
                 Task { await loadVideo(for: zone) }
             }
         }
-        // Auto-refresh when app returns to foreground
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             Task { await refresh() }
         }
@@ -76,22 +82,6 @@ struct ContentView: View {
                     .foregroundStyle(.white.opacity(0.65))
             }
             Spacer()
-            Button {
-                Task { await refresh() }
-            } label: {
-                Group {
-                    if isRefreshing {
-                        ProgressView().tint(.white)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.70))
-                    }
-                }
-                .frame(width: 36, height: 36)
-                .background(.ultraThinMaterial, in: Circle())
-            }
-            .disabled(isRefreshing)
         }
     }
 
@@ -235,34 +225,49 @@ struct ContentView: View {
         .multilineTextAlignment(.center)
     }
 
+    // MARK: - Creator Credit
+
+    @ViewBuilder
+    private var creatorCredit: some View {
+        if let creator = videoCreator {
+            Text("Video by \(creator) · Pexels")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.40))
+        }
+    }
+
     // MARK: - Logic
 
     private func initialize() async {
         await healthKit.initialize()
+        let zone: HRZone
         if let bpm = healthKit.restingHeartRate {
-            let zone = HRZone(bpm: bpm)
+            zone = HRZone(bpm: bpm)
             currentZone = zone
-            await loadVideo(for: zone)
         } else {
-            await loadVideo(for: .good)
+            zone = .good
         }
+        await loadVideo(for: zone)
     }
 
     private func refresh() async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
         await healthKit.fetchRestingHeartRate()
+        let zone: HRZone
         if let bpm = healthKit.restingHeartRate {
-            await loadVideo(for: HRZone(bpm: bpm))
+            zone = HRZone(bpm: bpm)
+            currentZone = zone
+        } else {
+            zone = currentZone ?? .good
         }
-        isRefreshing = false
+        await loadVideo(for: zone)
     }
 
     private func loadVideo(for zone: HRZone) async {
         do {
-            let url = try await pexels.fetchVideoURL(for: zone)
+            let result = try await pexels.fetchVideo(for: zone)
             withAnimation(.easeInOut(duration: 0.6)) {
-                videoURL = url
+                videoURL = result.url
+                videoCreator = result.creator
             }
         } catch {
             // Keep existing video on failure
