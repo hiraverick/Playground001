@@ -82,7 +82,7 @@ private struct PexelsVideo: Decodable {
 }
 
 private struct PexelsVideoFile: Decodable {
-    let quality: String
+    let quality: String?   // Pexels returns null for HLS/adaptive streams
     let link: String
     let width: Int?
     let height: Int?
