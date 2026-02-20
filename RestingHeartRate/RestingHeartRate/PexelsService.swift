@@ -18,7 +18,6 @@ struct PexelsService {
         components.queryItems = [
             URLQueryItem(name: "query", value: query),
             URLQueryItem(name: "per_page", value: "15"),
-            URLQueryItem(name: "orientation", value: "portrait"),
             URLQueryItem(name: "size", value: "medium"),
         ]
 

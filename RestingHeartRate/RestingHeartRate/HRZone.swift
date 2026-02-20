@@ -27,24 +27,24 @@ enum HRZone: Equatable {
         }
     }
 
-    /// Multiple queries per zone so repeated views get variety. All nature, graduated calm → intense.
+    /// All queries target top-down overhead drone/aerial nature shots, graduated calm → intense.
     var searchQueries: [String] {
         switch self {
         case .athlete:
-            // Very serene — still water, mist, dawn
-            return ["still lake misty morning", "calm water reflection nature", "peaceful forest dawn", "tranquil pond nature"]
+            // Serene — still water, glassy lakes from directly above
+            return ["top down aerial still lake", "overhead drone calm water nature", "bird eye view lake reflection", "top view aerial pond nature"]
         case .excellent:
-            // Gentle nature — flowing streams, soft light
-            return ["gentle stream forest", "meadow nature aerial", "coastal cliffs landscape", "rolling hills nature aerial"]
+            // Gentle — forests and meadows from above
+            return ["top down aerial forest canopy", "overhead drone green meadow", "bird eye view river forest", "top view aerial woodland nature"]
         case .good:
-            // Moderate nature — rivers, coastal scenery
-            return ["river flowing nature", "ocean coast landscape", "valley nature aerial", "forest canopy aerial"]
+            // Moderate — rivers and coastline from above
+            return ["top down aerial river flowing", "overhead drone ocean coast", "bird eye view waterfall top", "top view aerial nature stream"]
         case .average:
-            // Dynamic nature — ocean waves, waterfalls
-            return ["ocean waves crashing nature", "waterfall nature landscape", "mountain river rapids", "stormy sea waves"]
+            // Dynamic — waves and rapids from directly overhead
+            return ["top down aerial ocean waves", "overhead drone river rapids", "bird eye view crashing waves", "top view aerial waterfall"]
         case .high:
-            // Intense nature — storms, crashing surf, lightning
-            return ["lightning storm nature", "crashing waves storm", "thunderstorm nature landscape", "wild ocean storm waves"]
+            // Intense — turbulent water and storms from above
+            return ["top down aerial stormy ocean", "overhead drone turbulent waves", "bird eye view storm nature", "top view aerial wild sea"]
         }
     }
 
