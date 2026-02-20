@@ -7,73 +7,92 @@ struct ContentView: View {
     @State private var videoCreator: String? = nil
     @State private var isLoadingVideo = false
     @State private var currentZone: HRZone? = nil
+    @State private var currentVideoTask: Task<Void, Never>? = nil
+    @State private var didInitialize = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
+        // NavigationStack gives the embedded ScrollView a proper UINavigationController
+        // context so UIRefreshControl gesture coordination works correctly near
+        // the Dynamic Island, instead of being intercepted by the system gate.
+        NavigationStack {
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        header
+                            .padding(.horizontal, 24)
+                            .padding(.top, 20)
 
-                Spacer(minLength: 0)
+                        Spacer(minLength: 0)
 
-                if healthKit.isAuthorized {
-                    bpmOverlay
-                } else {
-                    authCard
+                        if healthKit.isAuthorized {
+                            bpmOverlay
+                        } else {
+                            authCard
+                        }
+
+                        Spacer(minLength: 0)
+
+                        creatorCredit
+                            .padding(.bottom, 12)
+                    }
+                    // Explicit frame prevents containerRelativeFrame from
+                    // getting infinite height on the scrolling axis, which
+                    // would stop the scroll view from knowing its content
+                    // fits — breaking the top-bounce/pull-to-refresh trigger.
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
+                .scrollBounceBehavior(.always)
+                .scrollIndicators(.hidden)
+                .refreshable { await refresh() }
+                .background {
+                    ZStack {
+                        if let url = videoURL {
+                            VideoPlayerView(url: url)
+                                .ignoresSafeArea()
+                                .transition(.opacity)
+                        } else {
+                            Color.black.ignoresSafeArea()
+                        }
 
-                Spacer(minLength: 0)
-
-                creatorCredit
-                    .padding(.bottom, 12)
-            }
-            .containerRelativeFrame([.horizontal, .vertical])
-        }
-        .scrollBounceBehavior(.always)
-        .scrollIndicators(.hidden)
-        .refreshable { await refresh() }
-        .background {
-            ZStack {
-                if let url = videoURL {
-                    VideoPlayerView(url: url)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black.opacity(0.55), location: 0.00),
+                                .init(color: .black.opacity(0.10), location: 0.35),
+                                .init(color: .black.opacity(0.10), location: 0.65),
+                                .init(color: .black.opacity(0.65), location: 1.00),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                         .ignoresSafeArea()
-                        .transition(.opacity)
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
 
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.55), location: 0.00),
-                        .init(color: .black.opacity(0.10), location: 0.35),
-                        .init(color: .black.opacity(0.10), location: 0.65),
-                        .init(color: .black.opacity(0.65), location: 1.00),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-
-                if isLoadingVideo {
-                    Color.black.opacity(0.30)
-                        .ignoresSafeArea()
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.4)
+                        if isLoadingVideo {
+                            Color.black.opacity(0.30)
+                                .ignoresSafeArea()
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(1.4)
+                        }
+                    }
                 }
             }
+            .ignoresSafeArea(edges: .bottom)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task { await initialize() }
         .onChange(of: healthKit.restingHeartRate) { _, bpm in
             guard let bpm else { return }
             let zone = HRZone(bpm: bpm)
-            if zone != currentZone {
+            // Only fire when zone actually changes (not every BPM tick)
+            // and only after initialization, to avoid a double-load race
+            // with refresh() which also sets currentZone before calling loadVideo.
+            if zone != currentZone, didInitialize {
                 currentZone = zone
-                Task { await loadVideo(for: zone) }
+                scheduleVideoLoad(for: zone)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            guard didInitialize else { return }
             Task { await refresh() }
         }
     }
@@ -106,7 +125,6 @@ struct ContentView: View {
             let zone = HRZone(bpm: bpm)
             VStack(spacing: 10) {
 
-                // Zone pill
                 Text(zone.label.uppercased())
                     .font(.system(.caption, design: .rounded, weight: .bold))
                     .kerning(2.5)
@@ -116,7 +134,6 @@ struct ContentView: View {
                     .background(zone.color.opacity(0.18), in: Capsule())
                     .overlay(Capsule().strokeBorder(zone.color.opacity(0.55), lineWidth: 1))
 
-                // BPM number
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(Int(bpm))")
                         .font(.system(size: 108, weight: .bold, design: .rounded))
@@ -131,14 +148,12 @@ struct ContentView: View {
                         .padding(.bottom, 14)
                 }
 
-                // Label
                 Text("Resting Heart Rate")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.white.opacity(0.60))
                     .textCase(.uppercase)
                     .kerning(1.2)
 
-                // Status
                 statusLabel
                     .padding(.top, 6)
             }
@@ -236,8 +251,7 @@ struct ContentView: View {
 
     // MARK: - Creator Credit
 
-    // Always in the layout so the bottom of the screen never jumps.
-    // Invisible while loading or before the first video loads.
+    // Always in the layout tree so the bottom of the screen never jumps.
     private var creatorCredit: some View {
         Text(videoCreator.map { "Video by \($0) · Pexels" } ?? " ")
             .font(.caption2)
@@ -252,11 +266,12 @@ struct ContentView: View {
         let zone: HRZone
         if let bpm = healthKit.restingHeartRate {
             zone = HRZone(bpm: bpm)
-            currentZone = zone
         } else {
             zone = .good
         }
+        currentZone = zone
         await loadVideo(for: zone)
+        didInitialize = true
     }
 
     private func refresh() async {
@@ -264,24 +279,36 @@ struct ContentView: View {
         let zone: HRZone
         if let bpm = healthKit.restingHeartRate {
             zone = HRZone(bpm: bpm)
-            currentZone = zone
         } else {
             zone = currentZone ?? .good
         }
+        // Set currentZone before loadVideo so that the onChange watcher
+        // (which may fire during the await below) sees the updated zone
+        // and skips its own redundant loadVideo call.
+        currentZone = zone
         await loadVideo(for: zone)
     }
 
+    /// Kicks off a video load without awaiting it (for use from non-async contexts).
+    private func scheduleVideoLoad(for zone: HRZone) {
+        currentVideoTask?.cancel()
+        currentVideoTask = Task { await loadVideo(for: zone) }
+    }
+
+    /// Loads a fresh video, cancelling any in-flight fetch first.
     private func loadVideo(for zone: HRZone) async {
+        currentVideoTask?.cancel()
         isLoadingVideo = true
         defer { isLoadingVideo = false }
         do {
             let result = try await pexels.fetchVideo(for: zone)
+            guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.6)) {
                 videoURL = result.url
                 videoCreator = result.creator
             }
         } catch {
-            // Keep existing video on failure
+            // Keep existing video on failure; isLoadingVideo clears via defer
         }
     }
 }
