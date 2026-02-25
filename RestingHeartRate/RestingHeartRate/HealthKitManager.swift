@@ -54,6 +54,7 @@ final class HealthKitManager {
             errorMessage = "HealthKit is not available on this device."
             return
         }
+        guard !isLoading, !isAuthorized else { return }
 
         isLoading = true
         errorMessage = nil

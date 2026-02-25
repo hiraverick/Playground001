@@ -85,7 +85,7 @@ struct ContentView: View {
         .gesture(pullGesture)
         .task { await initialize() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            guard didInitialize else { return }
+            guard didInitialize, healthKit.isAuthorized else { return }
             Task { await refresh() }
         }
     }
