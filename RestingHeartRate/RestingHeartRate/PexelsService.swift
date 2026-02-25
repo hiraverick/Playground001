@@ -7,8 +7,8 @@ struct VideoResult {
 
 struct PexelsService {
 
-    private let apiKey = "BtVtCdVT27bQX5xAzuGhH5kV9bTUC6Q0UXEXmctbMoNMM6A4NTkuxveD"
-    private let baseURL = "https://api.pexels.com/videos/search"
+    // IMPORTANT: Replace with your Cloudflare Worker URL after deploying
+    private let baseURL = "https://pexels-proxy.YOUR_SUBDOMAIN.workers.dev/videos/search"
 
     /// Picks a random search query for the zone and returns a streaming video URL + creator name.
     func fetchVideo(for zone: HRZone) async throws -> VideoResult {
@@ -22,7 +22,6 @@ struct PexelsService {
         ]
 
         var request = URLRequest(url: components.url!)
-        request.setValue(apiKey, forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 15
 
         let (data, response) = try await URLSession.shared.data(for: request)
