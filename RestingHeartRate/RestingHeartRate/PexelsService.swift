@@ -7,8 +7,7 @@ struct VideoResult {
 
 struct PexelsService {
 
-    // IMPORTANT: Replace with your Cloudflare Worker URL after deploying
-    private let baseURL = "https://pexels-proxy.YOUR_SUBDOMAIN.workers.dev/videos/search"
+    private let baseURL = "https://pexels-proxy.biometrics-api.workers.dev/videos/search"
 
     /// Picks a random search query for the zone and returns a streaming video URL + creator name.
     func fetchVideo(for zone: HRZone) async throws -> VideoResult {
