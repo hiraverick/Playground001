@@ -163,7 +163,13 @@ struct ContentView: View {
     private var bpmOverlay: some View {
         if let bpm = healthKit.restingHeartRate {
             bpmContent(bpm: bpm, zone: HRZone(bpm: bpm))
-        } else if !healthKit.isLoading {
+        } else if healthKit.isLoading {
+            bpmContent(bpm: 72, zone: .good)
+                .redacted(reason: .placeholder)
+                .opacity(placeholderPulse ? 0.4 : 0.75)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: placeholderPulse)
+                .onAppear { placeholderPulse = true }
+        } else {
             VStack(spacing: 12) {
                 Text("—")
                     .font(.system(size: 108, weight: .ultraLight, design: .rounded))
