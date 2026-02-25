@@ -84,6 +84,9 @@ struct ContentView: View {
         }
         .gesture(pullGesture)
         .task { await initialize() }
+        .onChange(of: healthKit.restingHeartRate) { _, newValue in
+            if newValue != nil { hasReceivedData = true }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             guard didInitialize, healthKit.isAuthorized else { return }
             Task { await refresh() }
@@ -152,10 +155,11 @@ struct ContentView: View {
     // MARK: - BPM Overlay
 
     @State private var placeholderPulse = false
+    @State private var hasReceivedData = false
 
     @ViewBuilder
     private var bpmOverlay: some View {
-        if healthKit.isLoading, healthKit.restingHeartRate == nil {
+        if healthKit.isLoading, healthKit.restingHeartRate == nil, !hasReceivedData {
             bpmContent(bpm: 72, zone: .good)
                 .redacted(reason: .placeholder)
                 .opacity(placeholderPulse ? 0.4 : 0.75)
