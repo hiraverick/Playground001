@@ -231,13 +231,25 @@ struct ContentView: View {
                     .foregroundStyle(.green)
             } else if let date = healthKit.lastReadingDate {
                 Label {
-                    Text("Last reading \(date, style: .relative) ago")
+                    Text("Last reading \(igTimestamp(date))")
                 } icon: {
                     Image(systemName: "clock")
                 }
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.60))
             }
+        }
+    }
+
+    private func igTimestamp(_ date: Date) -> String {
+        let s = Int(Date.now.timeIntervalSince(date))
+        switch s {
+        case ..<60:      return "just now"
+        case ..<3600:    return "\(s / 60)m ago"
+        case ..<86400:   return "\(s / 3600)h ago"
+        case ..<604800:  return "\(s / 86400)d ago"
+        case ..<2592000: return "\(s / 604800)w ago"
+        default:         return "\(s / 2592000)mo ago"
         }
     }
 
