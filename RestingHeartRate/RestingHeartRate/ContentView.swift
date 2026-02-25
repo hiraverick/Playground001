@@ -335,15 +335,25 @@ struct ContentView: View {
     private func loadVideo(for zone: HRZone) async {
         isLoadingVideo = true
         defer { isLoadingVideo = false }
-        do {
-            let result = try await pexels.fetchVideo(for: zone)
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.6)) {
-                videoURL = result.url
-                videoCreator = result.creator
+
+        for attempt in 0..<4 {
+            if attempt > 0 {
+                let delay: UInt64 = [5, 15, 30][attempt - 1]
+                try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
+                guard !Task.isCancelled else { return }
             }
-        } catch {
-            // Keep existing video on failure
+            do {
+                let result = try await pexels.fetchVideo(for: zone)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    videoURL = result.url
+                    videoCreator = result.creator
+                }
+                return
+            } catch {
+                isLoadingVideo = false  // hide spinner while waiting to retry
+                guard videoURL == nil else { return }  // already have video, don't retry
+            }
         }
     }
 }
