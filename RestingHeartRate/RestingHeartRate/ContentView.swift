@@ -151,49 +151,18 @@ struct ContentView: View {
 
     // MARK: - BPM Overlay
 
+    @State private var placeholderPulse = false
+
     @ViewBuilder
     private var bpmOverlay: some View {
         if healthKit.isLoading, healthKit.restingHeartRate == nil {
-            ProgressView()
-                .tint(.white)
-                .scaleEffect(1.5)
+            bpmContent(bpm: 72, zone: .good)
+                .redacted(reason: .placeholder)
+                .opacity(placeholderPulse ? 0.4 : 0.75)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: placeholderPulse)
+                .onAppear { placeholderPulse = true }
         } else if let bpm = healthKit.restingHeartRate {
-            let zone = HRZone(bpm: bpm)
-            VStack(spacing: 10) {
-                Text(zone.label.uppercased())
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .kerning(2.5)
-                    .foregroundStyle(zone.color)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(zone.color.opacity(0.18), in: Capsule())
-                    .overlay(Capsule().strokeBorder(zone.color.opacity(0.55), lineWidth: 1))
-
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(Int(bpm))")
-                        .font(.system(size: 108, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-                        .animation(.spring(duration: 0.4), value: bpm)
-                        .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 4)
-
-                    Text("BPM")
-                        .font(.system(.title2, design: .rounded, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(.bottom, 14)
-                }
-
-                Text("Resting Heart Rate")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.60))
-                    .textCase(.uppercase)
-                    .kerning(1.2)
-
-                statusLabel
-                    .padding(.top, 6)
-            }
-            .multilineTextAlignment(.center)
-
+            bpmContent(bpm: bpm, zone: HRZone(bpm: bpm))
         } else if !healthKit.isLoading {
             VStack(spacing: 12) {
                 Text("—")
@@ -204,6 +173,43 @@ struct ContentView: View {
                     .foregroundStyle(.white.opacity(0.55))
             }
         }
+    }
+
+    private func bpmContent(bpm: Double, zone: HRZone) -> some View {
+        VStack(spacing: 10) {
+            Text(zone.label.uppercased())
+                .font(.system(.caption, design: .rounded, weight: .bold))
+                .kerning(2.5)
+                .foregroundStyle(zone.color)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(zone.color.opacity(0.18), in: Capsule())
+                .overlay(Capsule().strokeBorder(zone.color.opacity(0.55), lineWidth: 1))
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(Int(bpm))")
+                    .font(.system(size: 108, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .animation(.spring(duration: 0.4), value: bpm)
+                    .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 4)
+
+                Text("BPM")
+                    .font(.system(.title2, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.bottom, 14)
+            }
+
+            Text("Resting Heart Rate")
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                .foregroundStyle(.white.opacity(0.60))
+                .textCase(.uppercase)
+                .kerning(1.2)
+
+            statusLabel
+                .padding(.top, 6)
+        }
+        .multilineTextAlignment(.center)
     }
 
     @ViewBuilder
