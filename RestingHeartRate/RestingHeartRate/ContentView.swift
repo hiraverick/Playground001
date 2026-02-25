@@ -41,8 +41,8 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            // Loading overlay (initial load only, not during pull-refresh)
-            if isLoadingVideo, !isRefreshing {
+            // Loading overlay (video change during pull-refresh only, not initial load)
+            if isLoadingVideo, !isRefreshing, didInitialize {
                 Color.black.opacity(0.3).ignoresSafeArea()
                 ProgressView()
                     .tint(.white)
@@ -57,7 +57,13 @@ struct ContentView: View {
 
                 Spacer(minLength: 0)
 
-                if healthKit.isAuthorized {
+                if !didInitialize {
+                    bpmContent(bpm: 72, zone: .good)
+                        .redacted(reason: .placeholder)
+                        .opacity(placeholderPulse ? 0.4 : 0.75)
+                        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: placeholderPulse)
+                        .onAppear { placeholderPulse = true }
+                } else if healthKit.isAuthorized {
                     bpmOverlay
                 } else {
                     authCard
@@ -84,9 +90,6 @@ struct ContentView: View {
         }
         .gesture(pullGesture)
         .task { await initialize() }
-        .onChange(of: healthKit.restingHeartRate) { _, newValue in
-            if newValue != nil { hasReceivedData = true }
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             guard didInitialize, healthKit.isAuthorized else { return }
             Task { await refresh() }
@@ -155,17 +158,10 @@ struct ContentView: View {
     // MARK: - BPM Overlay
 
     @State private var placeholderPulse = false
-    @State private var hasReceivedData = false
 
     @ViewBuilder
     private var bpmOverlay: some View {
-        if healthKit.isLoading, healthKit.restingHeartRate == nil, !hasReceivedData {
-            bpmContent(bpm: 72, zone: .good)
-                .redacted(reason: .placeholder)
-                .opacity(placeholderPulse ? 0.4 : 0.75)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: placeholderPulse)
-                .onAppear { placeholderPulse = true }
-        } else if let bpm = healthKit.restingHeartRate {
+        if let bpm = healthKit.restingHeartRate {
             bpmContent(bpm: bpm, zone: HRZone(bpm: bpm))
         } else if !healthKit.isLoading {
             VStack(spacing: 12) {
